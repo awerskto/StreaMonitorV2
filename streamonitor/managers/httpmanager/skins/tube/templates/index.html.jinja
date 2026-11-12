@@ -1,0 +1,85 @@
+<!doctype html>
+<html data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="dark light">
+    <title>StreaMonitor</title>
+    <link rel="stylesheet" href="/static/streamonitor@tube/tube.css?v={{ asset_version }}">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>&#127909;</text></svg>">
+</head>
+<body>
+    <a class="skip-link" href="#main">Skip to main content</a>
+
+    {# The icon sprite has to live in the document, otherwise a browser cannot
+       resolve the references of the icons. #}
+    {{ icon_sprite | safe }}
+
+    <div class="app" id="app">
+        <!-- Sidebar: collapses to icons on desktop, off-canvas on mobile -->
+        <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+            <div class="sidebar-head">
+                <button class="icon-btn" id="sidebar-toggle" type="button"
+                        aria-label="" aria-expanded="true">
+                    <svg class="i i-menu" aria-hidden="true"><use href="#menu"></use></svg>
+                </button>
+                <span class="brand">
+                    <svg class="brand-mark" aria-hidden="true"><use href="#logo"></use></svg>
+                    <span class="brand-text">StreaMonitor</span>
+                </span>
+            </div>
+
+            <nav class="sidebar-nav" id="sidebar-nav">
+                <!-- filled by app.js -->
+            </nav>
+
+            <div class="sidebar-foot">
+                <button class="icon-btn" id="theme-toggle" type="button"
+                        aria-label="">
+                    <svg class="i i-moon" aria-hidden="true"><use href="#moon"></use></svg>
+                </button>
+                <div class="lang" id="lang">
+                    <button class="icon-btn" id="lang-toggle" type="button"
+                            aria-haspopup="true" aria-expanded="false"
+                            aria-label="">
+                        <span class="lang-flag" id="lang-flag">🇬🇧</span>
+                    </button>
+                    <div class="lang-menu" id="lang-menu" role="menu" hidden></div>
+                </div>
+            </div>
+        </aside>
+
+        <div class="backdrop" id="backdrop" hidden></div>
+
+        <div class="main-wrap">
+            <header class="topbar">
+                <button class="icon-btn only-mobile" id="menu-btn" type="button"
+                        aria-label="" aria-controls="sidebar" aria-expanded="false">
+                    <svg class="i i-menu" aria-hidden="true"><use href="#menu"></use></svg>
+                </button>
+                <h1 class="topbar-title" id="view-title">Konta</h1>
+                <div class="topbar-actions" id="topbar-actions"></div>
+            </header>
+
+            <main class="content" id="main" tabindex="-1">
+                <div class="loading" id="loading">Loading&hellip;</div>
+            </main>
+        </div>
+    </div>
+
+    <div class="toast-stack" id="toast-stack" role="status" aria-live="polite" aria-atomic="true"></div>
+
+    <dialog class="modal" id="modal">
+        <form method="dialog" class="modal-inner">
+            <h2 class="modal-title" id="modal-title"></h2>
+            <p class="modal-text" id="modal-text"></p>
+            <menu class="modal-actions">
+                <button class="btn" value="cancel" type="submit" id="modal-cancel">Cancel</button>
+                <button class="btn btn-danger" value="confirm" type="submit" id="modal-confirm">Confirm</button>
+            </menu>
+        </form>
+    </dialog>
+
+    <script type="module" src="/static/streamonitor@tube/js/app.js?v={{ asset_version }}"></script>
+</body>
+</html>

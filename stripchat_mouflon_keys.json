@@ -1,0 +1,4 @@
+{
+  "_hint": "The mouflon keys are not stored in this repository. They have to be looked up: the application fetches them at runtime from the upstream project, or place your own key pairs here as \"key\": \"value\".",
+  "_source": "https://raw.githubusercontent.com/kesamom/stripchat_mouflon/main/stripchat_mouflon_keys.json"
+}

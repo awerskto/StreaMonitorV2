@@ -1,0 +1,138 @@
+import errno
+import os
+import subprocess
+import sys
+import time
+
+import requests.cookies
+from threading import Thread
+from parameters import DEBUG, SEGMENT_TIME, CONTAINER, FFMPEG_PATH, FFMPEG_READRATE, \
+    PLAYLIST_REFRESH_INTERVAL
+
+
+def getVideoFfmpeg(self, url, filename):
+    cmd = [FFMPEG_PATH]
+
+    # -user_agent is an HTTP protocol option. ffmpeg only accepts it when the
+    # top-level input is http(s). When the input is a local master playlist
+    # (file://), ffmpeg errors with "Option user_agent not found" and exits
+    # code 8 before fetching anything. The HLS demuxer will use a default UA
+    # for segment requests in that case, which CB/etc. accept.
+    input_is_http = isinstance(url, str) and url.startswith(('http://', 'https://'))
+    if input_is_http:
+        cmd.extend(['-user_agent', self.headers['User-Agent']])
+
+    if input_is_http and type(self.cookies) is requests.cookies.RequestsCookieJar:
+        cookies_text = ''
+        for cookie in self.cookies:
+            cookies_text += cookie.name + "=" + cookie.value + "; path=" + cookie.path + '; domain=' + cookie.domain + '\n'
+        if len(cookies_text) > 10:
+            cookies_text = cookies_text[:-1]
+        cmd.extend([
+            '-cookies', cookies_text
+        ])
+
+    if FFMPEG_READRATE:
+        cmd.extend(['-readrate', f'{FFMPEG_READRATE!s}'])
+
+    cmd.extend([
+        '-max_reload', '20',
+        '-seg_max_retry', '20',
+        '-m3u8_hold_counters', '20',
+        '-protocol_whitelist', 'file,https,tcp,tls,crypto,data',
+        '-rw_timeout', '15000000',
+        '-i', url,
+        '-c:a', 'copy',
+        '-c:v', 'copy',
+    ])
+
+    suffix = ''
+    if hasattr(self, 'filename_extra_suffix'):
+        suffix = self.filename_extra_suffix
+
+    if SEGMENT_TIME is not None:
+        username = filename.rsplit('-', maxsplit=2)[0]
+        cmd.extend([
+            '-f', 'segment',
+            '-reset_timestamps', '1',
+            '-segment_time', str(SEGMENT_TIME),
+            '-strftime', '1',
+            f'{username}-%Y%m%d-%H%M%S{suffix}.{CONTAINER}'
+        ])
+    else:
+        cmd.extend([
+            os.path.splitext(filename)[0] + suffix + '.' + CONTAINER
+        ])
+
+    class _Stopper:
+        def __init__(self):
+            self.stop = False
+
+        def pls_stop(self):
+            self.stop = True
+
+    stopping = _Stopper()
+    error = False
+
+    # Chaturbate (and other LL-HLS sites) put a short lived session token in
+    # the chunklist URLs of the master playlist. The master playlist is written
+    # to disk once, when the recording starts, so the token inside it goes
+    # stale while ffmpeg is still recording. Once it expires every segment
+    # request fails with HTTP 403, the recording stalls, and the audio and
+    # video renditions drift apart because they fail independently.
+    #
+    # Refreshing the master playlist periodically keeps the token alive.
+    refresher = getattr(self, 'playlist_refresher', None)
+    if refresher is not None:
+        def refresh_loop():
+            while not stopping.stop:
+                time.sleep(PLAYLIST_REFRESH_INTERVAL)
+                if stopping.stop:
+                    return
+                try:
+                    refresher()
+                except Exception:
+                    pass
+
+        Thread(target=refresh_loop, daemon=True).start()
+
+    def execute():
+        nonlocal error
+        try:
+            stderr = open(filename + '.stderr.log', 'w+') if DEBUG else subprocess.DEVNULL
+            startupinfo = None
+            if sys.platform == "win32":
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            process = subprocess.Popen(
+                args=cmd, stdin=subprocess.PIPE, stderr=stderr, stdout=subprocess.DEVNULL, startupinfo=startupinfo)
+        except OSError as e:
+            if e.errno == errno.ENOENT:
+                self.logger.error('FFMpeg executable not found!')
+                error = True
+                return
+            else:
+                self.logger.error("Got OSError, errno: " + str(e.errno))
+                error = True
+                return
+
+        while process.poll() is None:
+            if stopping.stop:
+                process.communicate(b'q')
+                break
+            try:
+                process.wait(1)
+            except subprocess.TimeoutExpired:
+                pass
+
+        if process.returncode and process.returncode != 0 and process.returncode != 255:
+            self.logger.error('The process exited with an error. Return code: ' + str(process.returncode))
+            error = True
+            return
+
+    thread = Thread(target=execute)
+    thread.start()
+    self.stopDownload = lambda: stopping.pls_stop()
+    thread.join()
+    self.stopDownload = None
+    return not error

@@ -1,0 +1,4 @@
+# Development and test dependencies.
+# The application itself needs only the packages in requirements.txt.
+-r requirements.txt
+pytest
